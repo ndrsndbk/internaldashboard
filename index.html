@@ -1,26 +1,27 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TPC Demo Monitor</title>
+  <title>TPC Internal Dashboard</title>
   <style>
     :root{
       --bg:#0b0c0f; --card:#14161c; --muted:#9aa3b2; --text:#e7eaf0;
-      --accent:#84CC16; --accent2:#22c55e; --danger:#ef4444;
+      --accent:#84CC16; --accent2:#22c55e; --danger:#ef4444; --line:#1f2330;
       --radius:16px;
     }
     *{box-sizing:border-box}
     body{
-      margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
       background:var(--bg); color:var(--text);
     }
     header{
       position:sticky; top:0; z-index:10;
       background:linear-gradient(180deg, rgba(11,12,15,0.98), rgba(11,12,15,0.9));
-      padding:14px 14px 10px; border-bottom:1px solid #1f2330;
+      padding:14px 14px 10px; border-bottom:1px solid var(--line);
     }
-    .title{font-size:18px; font-weight:700; display:flex; align-items:center; gap:8px;}
+    .title{font-size:18px; font-weight:800; display:flex; align-items:center; gap:8px;}
     .subtitle{font-size:12px; color:var(--muted); margin-top:4px;}
     .row{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
     .chip{
@@ -30,6 +31,7 @@
     .chip .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);}
     .chip.ok .dot{background:var(--accent2);}
     .chip.err .dot{background:var(--danger);}
+
     main{padding:12px; max-width:900px; margin:0 auto;}
     .controls{
       display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap;
@@ -39,27 +41,32 @@
       padding:10px 12px; border-radius:12px; font-size:14px; outline:none;
     }
     button{cursor:pointer}
-    button.primary{border-color:transparent; background:var(--accent); color:#0b0c0f; font-weight:700;}
+    button.primary{border-color:transparent; background:var(--accent); color:#0b0c0f; font-weight:800;}
     button.ghost{background:transparent}
     .tabs{
       display:flex; gap:8px; margin:6px 0 12px;
     }
     .tab{
       flex:1; text-align:center; padding:10px 8px; border-radius:12px;
-      background:#0f1117; border:1px solid #202432; font-weight:600; font-size:14px;
+      background:#0f1117; border:1px solid #202432; font-weight:700; font-size:14px;
     }
     .tab.active{background:#182016; border-color:#2a3b21; color:#dff7c0;}
+
     .list{display:grid; gap:10px;}
     .card{
-      background:var(--card); border:1px solid #1f2330; border-radius:var(--radius);
+      background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
       padding:12px;
     }
-    .card h3{margin:0 0 6px; font-size:15px;}
+    .card h3{margin:0 0 4px; font-size:15px;}
     .meta{font-size:12px; color:var(--muted); display:flex; flex-wrap:wrap; gap:10px;}
+    .pill{
+      font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid #25304a;
+      background:#0f1117; color:#cbd5e1;
+    }
     .kv{margin-top:8px; display:grid; grid-template-columns:120px 1fr; gap:6px 10px; font-size:13px;}
     .kv div:nth-child(odd){color:var(--muted)}
     .empty{color:var(--muted); text-align:center; padding:30px 10px;}
-    .footer-space{height:18px}
+
     @media(min-width:700px){
       header{padding:16px 22px 12px;}
       main{padding:18px;}
@@ -68,8 +75,9 @@
   </style>
 </head>
 <body>
+
 <header>
-  <div class="title">📲 TPC Demo Monitor</div>
+  <div class="title">🧭 TPC Internal Monitor</div>
   <div class="subtitle">Customers + Meeting Requests (live)</div>
   <div class="row">
     <div id="connChip" class="chip"><span class="dot"></span><span id="connText">Not connected</span></div>
@@ -90,8 +98,6 @@
       <option value="250">Last 250</option>
     </select>
     <input id="searchInput" type="search" placeholder="Search wa_name / number…" />
-    <button id="signInBtn">Sign in</button>
-    <button id="signOutBtn" style="display:none;">Sign out</button>
   </div>
 
   <div class="tabs">
@@ -101,20 +107,13 @@
 
   <section id="customers" class="list"></section>
   <section id="meeting_requests" class="list" style="display:none;"></section>
-
-  <div class="footer-space"></div>
 </main>
 
-<script type="module">
-  import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+<script>
+  // === SAME STRATEGY AS stamp-card-dashboard ===
+  const SUPABASE_URL = "https://lhbtgjvejsnsrlstwlwl.supabase.co";
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxoYnRnanZlanNuc3Jsc3R3bHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYxODYzMjQsImV4cCI6MjA3MTc2MjMyNH0.tEKLgAaaZZ1jnODoEYWkFYbdBWYZGI1Lu-6rBvrzXBI"; // anon public key
 
-  // 1) PUT YOUR CREDENTIALS HERE
-  const SUPABASE_URL = "https://lhbtgjvejnsrlstwlwl.supabase.co"; // from your screenshot
-  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxoYnRnanZlanNuc3Jsc3R3bHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYxODYzMjQsImV4cCI6MjA3MTc2MjMyNH0.tEKLgAaaZZ1jnODoEYWkFYbdBWYZGI1Lu-6rBvrzXBI";
-
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-  // UI elements
   const connChip = document.getElementById("connChip");
   const connText = document.getElementById("connText");
   const customersEl = document.getElementById("customers");
@@ -126,8 +125,6 @@
   const searchInput = document.getElementById("searchInput");
   const refreshBtn = document.getElementById("refreshBtn");
   const autoBtn = document.getElementById("autoBtn");
-  const signInBtn = document.getElementById("signInBtn");
-  const signOutBtn = document.getElementById("signOutBtn");
 
   let activeTab = "customers";
   let autoTimer = null;
@@ -146,30 +143,89 @@
     catch { return ts; }
   }
 
-  function pickTitle(row){
-    return row.wa_name || row.first_name || row.name || row.customer_id || row.id || "Record";
+  function inferCreatedAt(row){
+    return row.created_at || row.inserted_at || row.timestamp || row.updated_at || null;
   }
 
-  function renderCards(el, rows){
+  function safe(v){
+    return (v === null || v === undefined) ? "" : String(v);
+  }
+
+  async function fetchTable(table, limit){
+    // Try to order by created_at, but don't break if it doesn't exist
+    const order = "created_at.desc";
+    const url = `${SUPABASE_URL}/rest/v1/${table}?select=*&order=${order}&limit=${limit}`;
+
+    const res = await fetch(url, {
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`
+      }
+    });
+
+    if(!res.ok){
+      const txt = await res.text();
+      throw new Error(`${table}: ${txt}`);
+    }
+    return res.json();
+  }
+
+  function renderCustomers(rows){
     if(!rows?.length){
-      el.innerHTML = `<div class="empty">No records yet.</div>`;
+      customersEl.innerHTML = `<div class="empty">No customers yet.</div>`;
       return;
     }
-    el.innerHTML = rows.map(r=>{
-      const keys = Object.keys(r);
-      const kv = keys.map(k=>`
-        <div>${k}</div><div>${String(r[k] ?? "")}</div>
-      `).join("");
-      const created = r.created_at || r.inserted_at || r.timestamp;
+    customersEl.innerHTML = rows.map(r=>{
+      const created = inferCreatedAt(r);
+      const name = r.wa_name || r.first_name || "New customer";
+      const number = r.customer_id || r.wa_id || r.cell_number || "";
+      const latest = r.latest_message || r.state || r.status || "";
+
       return `
         <article class="card">
-          <h3>${pickTitle(r)}</h3>
+          <h3>${safe(name)}</h3>
           <div class="meta">
-            ${created ? `<div>🕒 ${fmtTime(created)}</div>` : ""}
-            ${r.customer_id ? `<div>☎️ ${r.customer_id}</div>` : ""}
-            ${r.wa_id ? `<div>☎️ ${r.wa_id}</div>` : ""}
+            <span class="pill">☎️ ${safe(number)}</span>
+            ${created ? `<span>🕒 ${fmtTime(created)}</span>` : ""}
+            ${latest ? `<span class="pill">${safe(latest)}</span>` : ""}
           </div>
-          <div class="kv">${kv}</div>
+
+          <div class="kv">
+            <div>customer_id</div><div>${safe(r.customer_id)}</div>
+            <div>wa_name</div><div>${safe(r.wa_name)}</div>
+            ${r.email !== undefined ? `<div>email</div><div>${safe(r.email)}</div>` : ""}
+            ${r.number_of_visits !== undefined ? `<div>visits</div><div>${safe(r.number_of_visits)}</div>` : ""}
+            ${r.days_since_last_visit !== undefined ? `<div>recency</div><div>${safe(r.days_since_last_visit)}</div>` : ""}
+          </div>
+        </article>
+      `;
+    }).join("");
+  }
+
+  function renderMeetings(rows){
+    if(!rows?.length){
+      meetingsEl.innerHTML = `<div class="empty">No meeting requests yet.</div>`;
+      return;
+    }
+    meetingsEl.innerHTML = rows.map(r=>{
+      const created = inferCreatedAt(r);
+      const name = r.wa_name || r.name || "Meeting request";
+      const number = r.customer_id || r.wa_id || "";
+
+      return `
+        <article class="card">
+          <h3>${safe(name)}</h3>
+          <div class="meta">
+            <span class="pill">☎️ ${safe(number)}</span>
+            ${created ? `<span>🕒 ${fmtTime(created)}</span>` : ""}
+            ${r.service ? `<span class="pill">Service: ${safe(r.service)}</span>` : ""}
+          </div>
+
+          <div class="kv">
+            ${Object.keys(r).map(k=>`
+              <div>${k}</div><div>${safe(r[k])}</div>
+            `).join("")}
+          </div>
         </article>
       `;
     }).join("");
@@ -179,42 +235,25 @@
     const q = searchInput.value.trim().toLowerCase();
     const filterFn = row => {
       if(!q) return true;
-      return Object.values(row).some(v => String(v ?? "").toLowerCase().includes(q));
+      return Object.values(row).some(v => safe(v).toLowerCase().includes(q));
     };
+
     if(activeTab === "customers"){
-      renderCards(customersEl, allCustomers.filter(filterFn));
+      renderCustomers(allCustomers.filter(filterFn));
     } else {
-      renderCards(meetingsEl, allMeetings.filter(filterFn));
+      renderMeetings(allMeetings.filter(filterFn));
     }
   }
 
   async function loadData(){
     const limit = Number(limitSelect.value);
-
     try{
       setConn(true, "Connecting…");
 
-      // customers
-      let customersQuery = supabase
-        .from("customers")
-        .select("*")
-        .limit(limit);
-
-      // meeting_requests
-      let meetingsQuery = supabase
-        .from("meeting_requests")
-        .select("*")
-        .limit(limit);
-
-      // Try ordering by created_at if exists
-      customersQuery = customersQuery.order("created_at", { ascending:false, nullsFirst:false });
-      meetingsQuery = meetingsQuery.order("created_at", { ascending:false, nullsFirst:false });
-
-      const [{ data: customers, error: cErr }, { data: meetings, error: mErr }] =
-        await Promise.all([customersQuery, meetingsQuery]);
-
-      if(cErr) throw cErr;
-      if(mErr) throw mErr;
+      const [customers, meetings] = await Promise.all([
+        fetchTable("customers", limit),
+        fetchTable("meeting_requests", limit)
+      ]);
 
       allCustomers = customers || [];
       allMeetings = meetings || [];
@@ -222,17 +261,17 @@
       customersCountEl.textContent = allCustomers.length;
       meetingsCountEl.textContent = allMeetings.length;
 
-      renderCards(customersEl, allCustomers);
-      renderCards(meetingsEl, allMeetings);
+      renderCustomers(allCustomers);
+      renderMeetings(allMeetings);
       applySearch();
 
       lastRefreshEl.textContent = new Date().toLocaleTimeString();
       setConn(true, "Connected");
-    } catch (e){
+    } catch(e){
       console.error(e);
-      setConn(false, e.message || "Connection error");
-      customersEl.innerHTML = `<div class="empty">Failed to load customers.</div>`;
-      meetingsEl.innerHTML = `<div class="empty">Failed to load meeting requests.</div>`;
+      setConn(false, e.message || "Failed to fetch");
+      customersEl.innerHTML = `<div class="empty">${safe(e.message)}</div>`;
+      meetingsEl.innerHTML = `<div class="empty">${safe(e.message)}</div>`;
     }
   }
 
@@ -259,39 +298,16 @@
     }
   }
 
-  // ---- optional auth (recommended once RLS is on) ----
-  async function signIn(){
-    const email = prompt("Email for dashboard login:");
-    if(!email) return;
-    const password = prompt("Password:");
-    if(!password) return;
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if(error) alert(error.message);
-    else await loadData();
-  }
-
-  async function signOut(){
-    await supabase.auth.signOut();
-    await loadData();
-  }
-
-  supabase.auth.onAuthStateChange((_event, session)=>{
-    const loggedIn = !!session;
-    signInBtn.style.display = loggedIn ? "none" : "inline-block";
-    signOutBtn.style.display = loggedIn ? "inline-block" : "none";
-  });
-
-  // Events
-  document.querySelectorAll(".tab").forEach(b=> b.addEventListener("click", ()=>setTab(b.dataset.tab)));
+  document.querySelectorAll(".tab").forEach(b=>
+    b.addEventListener("click", ()=>setTab(b.dataset.tab))
+  );
   refreshBtn.addEventListener("click", loadData);
   autoBtn.addEventListener("click", toggleAuto);
   limitSelect.addEventListener("change", loadData);
   searchInput.addEventListener("input", applySearch);
-  signInBtn.addEventListener("click", signIn);
-  signOutBtn.addEventListener("click", signOut);
 
-  // Initial load
   loadData();
 </script>
+
 </body>
 </html>
