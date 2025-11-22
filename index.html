@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TPC Demo Monitor</title>
+  <style>
+    :root{
+      --bg:#0b0c0f; --card:#14161c; --muted:#9aa3b2; --text:#e7eaf0;
+      --accent:#84CC16; --accent2:#22c55e; --danger:#ef4444;
+      --radius:16px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
+      background:var(--bg); color:var(--text);
+    }
+    header{
+      position:sticky; top:0; z-index:10;
+      background:linear-gradient(180deg, rgba(11,12,15,0.98), rgba(11,12,15,0.9));
+      padding:14px 14px 10px; border-bottom:1px solid #1f2330;
+    }
+    .title{font-size:18px; font-weight:700; display:flex; align-items:center; gap:8px;}
+    .subtitle{font-size:12px; color:var(--muted); margin-top:4px;}
+    .row{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+    .chip{
+      background:#0f1117; border:1px solid #202432; color:var(--text);
+      padding:6px 10px; border-radius:999px; font-size:12px; display:inline-flex; gap:6px; align-items:center;
+    }
+    .chip .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);}
+    .chip.ok .dot{background:var(--accent2);}
+    .chip.err .dot{background:var(--danger);}
+    main{padding:12px; max-width:900px; margin:0 auto;}
+    .controls{
+      display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap;
+    }
+    button, select, input{
+      background:#0f1117; color:var(--text); border:1px solid #202432;
+      padding:10px 12px; border-radius:12px; font-size:14px; outline:none;
+    }
+    button{cursor:pointer}
+    button.primary{border-color:transparent; background:var(--accent); color:#0b0c0f; font-weight:700;}
+    button.ghost{background:transparent}
+    .tabs{
+      display:flex; gap:8px; margin:6px 0 12px;
+    }
+    .tab{
+      flex:1; text-align:center; padding:10px 8px; border-radius:12px;
+      background:#0f1117; border:1px solid #202432; font-weight:600; font-size:14px;
+    }
+    .tab.active{background:#182016; border-color:#2a3b21; color:#dff7c0;}
+    .list{display:grid; gap:10px;}
+    .card{
+      background:var(--card); border:1px solid #1f2330; border-radius:var(--radius);
+      padding:12px;
+    }
+    .card h3{margin:0 0 6px; font-size:15px;}
+    .meta{font-size:12px; color:var(--muted); display:flex; flex-wrap:wrap; gap:10px;}
+    .kv{margin-top:8px; display:grid; grid-template-columns:120px 1fr; gap:6px 10px; font-size:13px;}
+    .kv div:nth-child(odd){color:var(--muted)}
+    .empty{color:var(--muted); text-align:center; padding:30px 10px;}
+    .footer-space{height:18px}
+    @media(min-width:700px){
+      header{padding:16px 22px 12px;}
+      main{padding:18px;}
+      .kv{grid-template-columns:160px 1fr;}
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="title">📲 TPC Demo Monitor</div>
+  <div class="subtitle">Customers + Meeting Requests (live)</div>
+  <div class="row">
+    <div id="connChip" class="chip"><span class="dot"></span><span id="connText">Not connected</span></div>
+    <div class="chip">Customers: <b id="customersCount">–</b></div>
+    <div class="chip">Meeting requests: <b id="meetingsCount">–</b></div>
+    <div class="chip">Last refresh: <span id="lastRefresh">–</span></div>
+  </div>
+</header>
+
+<main>
+  <div class="controls">
+    <button id="refreshBtn" class="primary">Refresh now</button>
+    <button id="autoBtn" class="ghost">Auto: Off</button>
+    <select id="limitSelect">
+      <option value="25">Last 25</option>
+      <option value="50" selected>Last 50</option>
+      <option value="100">Last 100</option>
+      <option value="250">Last 250</option>
+    </select>
+    <input id="searchInput" type="search" placeholder="Search wa_name / number…" />
+    <button id="signInBtn">Sign in</button>
+    <button id="signOutBtn" style="display:none;">Sign out</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="customers">Customers</button>
+    <button class="tab" data-tab="meeting_requests">Meeting Requests</button>
+  </div>
+
+  <section id="customers" class="list"></section>
+  <section id="meeting_requests" class="list" style="display:none;"></section>
+
+  <div class="footer-space"></div>
+</main>
+
+<script type="module">
+  import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+  // 1) PUT YOUR CREDENTIALS HERE
+  const SUPABASE_URL = "https://lhbtgjvejnsrlstwlwl.supabase.co"; // from your screenshot
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxoYnRnanZlanNuc3Jsc3R3bHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYxODYzMjQsImV4cCI6MjA3MTc2MjMyNH0.tEKLgAaaZZ1jnODoEYWkFYbdBWYZGI1Lu-6rBvrzXBI";
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // UI elements
+  const connChip = document.getElementById("connChip");
+  const connText = document.getElementById("connText");
+  const customersEl = document.getElementById("customers");
+  const meetingsEl = document.getElementById("meeting_requests");
+  const customersCountEl = document.getElementById("customersCount");
+  const meetingsCountEl = document.getElementById("meetingsCount");
+  const lastRefreshEl = document.getElementById("lastRefresh");
+  const limitSelect = document.getElementById("limitSelect");
+  const searchInput = document.getElementById("searchInput");
+  const refreshBtn = document.getElementById("refreshBtn");
+  const autoBtn = document.getElementById("autoBtn");
+  const signInBtn = document.getElementById("signInBtn");
+  const signOutBtn = document.getElementById("signOutBtn");
+
+  let activeTab = "customers";
+  let autoTimer = null;
+  let allCustomers = [];
+  let allMeetings = [];
+
+  function setConn(ok, msg){
+    connChip.classList.toggle("ok", ok);
+    connChip.classList.toggle("err", !ok);
+    connText.textContent = msg;
+  }
+
+  function fmtTime(ts){
+    if(!ts) return "–";
+    try { return new Date(ts).toLocaleString(); }
+    catch { return ts; }
+  }
+
+  function pickTitle(row){
+    return row.wa_name || row.first_name || row.name || row.customer_id || row.id || "Record";
+  }
+
+  function renderCards(el, rows){
+    if(!rows?.length){
+      el.innerHTML = `<div class="empty">No records yet.</div>`;
+      return;
+    }
+    el.innerHTML = rows.map(r=>{
+      const keys = Object.keys(r);
+      const kv = keys.map(k=>`
+        <div>${k}</div><div>${String(r[k] ?? "")}</div>
+      `).join("");
+      const created = r.created_at || r.inserted_at || r.timestamp;
+      return `
+        <article class="card">
+          <h3>${pickTitle(r)}</h3>
+          <div class="meta">
+            ${created ? `<div>🕒 ${fmtTime(created)}</div>` : ""}
+            ${r.customer_id ? `<div>☎️ ${r.customer_id}</div>` : ""}
+            ${r.wa_id ? `<div>☎️ ${r.wa_id}</div>` : ""}
+          </div>
+          <div class="kv">${kv}</div>
+        </article>
+      `;
+    }).join("");
+  }
+
+  function applySearch(){
+    const q = searchInput.value.trim().toLowerCase();
+    const filterFn = row => {
+      if(!q) return true;
+      return Object.values(row).some(v => String(v ?? "").toLowerCase().includes(q));
+    };
+    if(activeTab === "customers"){
+      renderCards(customersEl, allCustomers.filter(filterFn));
+    } else {
+      renderCards(meetingsEl, allMeetings.filter(filterFn));
+    }
+  }
+
+  async function loadData(){
+    const limit = Number(limitSelect.value);
+
+    try{
+      setConn(true, "Connecting…");
+
+      // customers
+      let customersQuery = supabase
+        .from("customers")
+        .select("*")
+        .limit(limit);
+
+      // meeting_requests
+      let meetingsQuery = supabase
+        .from("meeting_requests")
+        .select("*")
+        .limit(limit);
+
+      // Try ordering by created_at if exists
+      customersQuery = customersQuery.order("created_at", { ascending:false, nullsFirst:false });
+      meetingsQuery = meetingsQuery.order("created_at", { ascending:false, nullsFirst:false });
+
+      const [{ data: customers, error: cErr }, { data: meetings, error: mErr }] =
+        await Promise.all([customersQuery, meetingsQuery]);
+
+      if(cErr) throw cErr;
+      if(mErr) throw mErr;
+
+      allCustomers = customers || [];
+      allMeetings = meetings || [];
+
+      customersCountEl.textContent = allCustomers.length;
+      meetingsCountEl.textContent = allMeetings.length;
+
+      renderCards(customersEl, allCustomers);
+      renderCards(meetingsEl, allMeetings);
+      applySearch();
+
+      lastRefreshEl.textContent = new Date().toLocaleTimeString();
+      setConn(true, "Connected");
+    } catch (e){
+      console.error(e);
+      setConn(false, e.message || "Connection error");
+      customersEl.innerHTML = `<div class="empty">Failed to load customers.</div>`;
+      meetingsEl.innerHTML = `<div class="empty">Failed to load meeting requests.</div>`;
+    }
+  }
+
+  function setTab(tab){
+    activeTab = tab;
+    document.querySelectorAll(".tab").forEach(b=>{
+      b.classList.toggle("active", b.dataset.tab === tab);
+    });
+    customersEl.style.display = tab === "customers" ? "grid" : "none";
+    meetingsEl.style.display = tab === "meeting_requests" ? "grid" : "none";
+    applySearch();
+  }
+
+  function toggleAuto(){
+    if(autoTimer){
+      clearInterval(autoTimer);
+      autoTimer = null;
+      autoBtn.textContent = "Auto: Off";
+      autoBtn.classList.remove("primary");
+    } else {
+      autoTimer = setInterval(loadData, 10000);
+      autoBtn.textContent = "Auto: On (10s)";
+      autoBtn.classList.add("primary");
+    }
+  }
+
+  // ---- optional auth (recommended once RLS is on) ----
+  async function signIn(){
+    const email = prompt("Email for dashboard login:");
+    if(!email) return;
+    const password = prompt("Password:");
+    if(!password) return;
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if(error) alert(error.message);
+    else await loadData();
+  }
+
+  async function signOut(){
+    await supabase.auth.signOut();
+    await loadData();
+  }
+
+  supabase.auth.onAuthStateChange((_event, session)=>{
+    const loggedIn = !!session;
+    signInBtn.style.display = loggedIn ? "none" : "inline-block";
+    signOutBtn.style.display = loggedIn ? "inline-block" : "none";
+  });
+
+  // Events
+  document.querySelectorAll(".tab").forEach(b=> b.addEventListener("click", ()=>setTab(b.dataset.tab)));
+  refreshBtn.addEventListener("click", loadData);
+  autoBtn.addEventListener("click", toggleAuto);
+  limitSelect.addEventListener("change", loadData);
+  searchInput.addEventListener("input", applySearch);
+  signInBtn.addEventListener("click", signIn);
+  signOutBtn.addEventListener("click", signOut);
+
+  // Initial load
+  loadData();
+</script>
+</body>
+</html>
