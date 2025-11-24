@@ -7,7 +7,7 @@
   <style>
     :root{
       --bg:#0b0c0f; --card:#14161c; --muted:#9aa3b2; --text:#e7eaf0;
-      --accent:#84CC16; --accent2:#22c55e; --danger:#ef4444; --line:#1f2330;
+      --accent:#10744d; --accent2:#22c55e; --danger:#ef4444; --line:#1f2330;
       --radius:16px;
     }
     *{box-sizing:border-box}
@@ -40,8 +40,9 @@
       background:#0f1117; color:var(--text); border:1px solid #202432;
       padding:10px 12px; border-radius:12px; font-size:14px; outline:none;
     }
+    #searchInput{flex:1; min-width:200px;}
     button{cursor:pointer}
-    button.primary{border-color:transparent; background:var(--accent); color:#0b0c0f; font-weight:800;}
+    button.primary{border-color:transparent; background:var(--accent2); color:#0b0c0f; font-weight:800;}
     button.ghost{background:transparent}
     .tabs{
       display:flex; gap:8px; margin:6px 0 12px;
@@ -97,7 +98,8 @@
       <option value="100">Last 100</option>
       <option value="250">Last 250</option>
     </select>
-    <input id="searchInput" type="search" placeholder="Search wa_name / number…" />
+    <input id="searchInput" type="search" placeholder="Search profile_name / number…" />
+    <button id="downloadBtn" class="ghost">Download CSV</button>
   </div>
 
   <div class="tabs">
@@ -125,6 +127,7 @@
   const searchInput = document.getElementById("searchInput");
   const refreshBtn = document.getElementById("refreshBtn");
   const autoBtn = document.getElementById("autoBtn");
+  const downloadBtn = document.getElementById("downloadBtn");
 
   let activeTab = "customers";
   let autoTimer = null;
@@ -177,7 +180,7 @@
     }
     customersEl.innerHTML = rows.map(r=>{
       const created = inferCreatedAt(r);
-      const name = r.wa_name || r.first_name || "New customer";
+      const name = r.profile_name || r.wa_name || r.first_name || "New customer";
       const number = r.customer_id || r.wa_id || r.cell_number || "";
       const latest = r.latest_message || r.state || r.status || "";
 
@@ -192,7 +195,7 @@
 
           <div class="kv">
             <div>customer_id</div><div>${safe(r.customer_id)}</div>
-            <div>wa_name</div><div>${safe(r.wa_name)}</div>
+            <div>profile_name</div><div>${safe(r.profile_name)}</div>
             ${r.email !== undefined ? `<div>email</div><div>${safe(r.email)}</div>` : ""}
             ${r.number_of_visits !== undefined ? `<div>visits</div><div>${safe(r.number_of_visits)}</div>` : ""}
             ${r.days_since_last_visit !== undefined ? `<div>recency</div><div>${safe(r.days_since_last_visit)}</div>` : ""}
@@ -231,18 +234,50 @@
     }).join("");
   }
 
-  function applySearch(){
+  function getFilteredRows(){
     const q = searchInput.value.trim().toLowerCase();
     const filterFn = row => {
       if(!q) return true;
       return Object.values(row).some(v => safe(v).toLowerCase().includes(q));
     };
 
+    return activeTab === "customers"
+      ? allCustomers.filter(filterFn)
+      : allMeetings.filter(filterFn);
+  }
+
+  function applySearch(){
+    const rows = getFilteredRows();
     if(activeTab === "customers"){
-      renderCustomers(allCustomers.filter(filterFn));
+      renderCustomers(rows);
     } else {
-      renderMeetings(allMeetings.filter(filterFn));
+      renderMeetings(rows);
     }
+  }
+
+  function toCSV(rows){
+    if(!rows?.length) return "";
+    const headers = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
+    const escape = v => `"${String(v ?? "").replace(/"/g,'""')}"`;
+    const lines = [headers.join(",")];
+    rows.forEach(row => {
+      lines.push(headers.map(h => escape(row[h])).join(","));
+    });
+    return lines.join("\n");
+  }
+
+  function downloadCSV(){
+    const rows = getFilteredRows();
+    if(!rows.length) return;
+    const csv = toCSV(rows);
+    const blob = new Blob([csv], {type:"text/csv"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const filename = activeTab === "customers" ? "customers.csv" : "meeting_requests.csv";
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   async function loadData(){
@@ -305,6 +340,7 @@
   autoBtn.addEventListener("click", toggleAuto);
   limitSelect.addEventListener("change", loadData);
   searchInput.addEventListener("input", applySearch);
+  downloadBtn.addEventListener("click", downloadCSV);
 
   loadData();
 </script>
